@@ -38,7 +38,7 @@ class DuelingQAgent:
         self.epsilon_max = 1.0
         self.epsilon_decay = 0.001
         self.epsilon_min = 0.01
-        self.learning_rate = 0.001
+        self.learning_rate = 0.01
         self.batch_size = 64
         self.model = self._build_model()
         self.target_model = self._build_model()
