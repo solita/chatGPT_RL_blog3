@@ -1,7 +1,7 @@
 import unittest
 
 import numpy as np
-from environment import CabDriver
+from .environment import CabDriver
 
 # Defining hyperparameters
 m = 5  # number of cities
@@ -38,6 +38,13 @@ class TestCabDriver(unittest.TestCase):
                 pass
             else:
                 self.assertNotEqual(action[0], action[1])
+    def test_reset(self):
+        action_space, state_space, state_init = self.driver.reset()
+        self.assertIsInstance(action_space, list)
+        self.assertIsInstance(state_space, list)
+        self.assertIsInstance(state_init, list)
+        self.assertEqual(len(action_space), m*(m-1)+2) # +2 so that we take into account the go offline actoin that was appended to the action_space
+        self.assertEqual(len(state_space), m*t*d)
 
 if __name__ == '__main__':
     unittest.main()

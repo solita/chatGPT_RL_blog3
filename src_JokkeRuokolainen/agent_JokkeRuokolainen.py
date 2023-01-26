@@ -2,15 +2,15 @@ import pickle
 import random
 from collections import deque
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 from keras import Model
+from keras import backend as K
 from keras.layers import Dense, Input, Lambda
 from keras.losses import huber
-from keras.optimizers import Adam
-from tensorflow.keras import backend as K
+from keras.optimizers import Nadam
 
+# from .prb import PrioritizedReplayBuffer
 # Defining hyperparameters
 m = 5  # number of cities, ranges from 1 ..... m
 t = 24  # number of hours, ranges from 0 .... t-1
@@ -32,14 +32,16 @@ class DuelingQAgent:
         """
         self.state_size = state_size
         self.action_size = action_size
-        self.memory = deque(maxlen=buffer_size)
         self.discount_factor = 0.95  # gamma
         self.epsilon = 1.0  # exploration rate
         self.epsilon_max = 1.0
         self.epsilon_decay = 0.001
         self.epsilon_min = 0.01
         self.learning_rate = 0.01
+
+        self.memory = deque(maxlen=buffer_size)
         self.batch_size = 64
+
         self.model = self._build_model()
         self.target_model = self._build_model()
         self.update_target_model()
@@ -56,8 +58,41 @@ class DuelingQAgent:
         output = Lambda(
             lambda x: x[0] + (x[1]-K.mean(x[1], axis=1, keepdims=True)))([value, advantage])
         model = Model(inputs=input_state, outputs=output)
-        model.compile(loss=huber, optimizer=Adam(lr=self.learning_rate))
+        model.compile(loss=huber, optimizer=Nadam(
+            learning_rate=self.learning_rate))
         return model
+
+    def exponential_decay(self, initial_epsilon: float, decay_rate: float, step: int) -> float:
+        """
+        This function returns the epsilon value for the given step using exponential decay.
+        The epsilon value starts at the initial_epsilon and decays exponentially with decay_rate.
+        It is used as a part of exploration-exploitation trade-off of reinforcement learning.
+
+        Parameters:
+        initial_epsilon (float): The starting value of epsilon.
+        decay_rate (float): The rate at which epsilon decays.
+        step (int): The current step of the training.
+
+        Returns:
+        float: The epsilon value for the given step. 
+        """
+        return initial_epsilon * np.exp(-decay_rate * step)
+
+    def inverse_time_decay(self, initial_epsilon: float, decay_rate: float, step: int) -> float:
+        """
+        This function returns the epsilon value for the given step using inverse time decay.
+        The epsilon value starts at the initial_epsilon and decays inversely proportional to the step number with decay_rate.
+        It is used as a part of exploration-exploitation trade-off of reinforcement learning.
+
+        Parameters:
+        initial_epsilon (float): The starting value of epsilon.
+        decay_rate (float): The rate at which epsilon decays.
+        step (int): The current step of the training.
+
+        Returns:
+        float: The epsilon value for the given step.
+        """
+        return initial_epsilon / (1 + decay_rate * step)
 
     def update_target_model(self):
         """
@@ -70,11 +105,11 @@ class DuelingQAgent:
         Add a new experience to the agent's memory.
 
         Parameters:
-                                        state (array-like): The current state.
-                                        action (int): The action taken in the current state.
-                                        reward (float): The reward received for taking the action in the current state.
-                                        next_state (array-like): The state reached after taking the action in the current state.
-                                        done (bool): Whether the episode has ended.
+        state (array-like): The current state.
+        action (int): The action taken in the current state.
+        reward (float): The reward received for taking the action in the current state.
+        next_state (array-like): The state reached after taking the action in the current state.
+        done (bool): Whether the episode has ended.
         """
         self.memory.append((state, action, reward, next_state, done))
 
@@ -82,11 +117,11 @@ class DuelingQAgent:
         """
         Get the next action to take using epsilon-greedy policy and decay in epsilon after each sample from the environment.
 
-Parameters:
+        Parameters:
         state (array-like): The current state of the agent.
         possible_actions_index (list of int): The possible actions that can be taken in the current state.
 
-Returns:
+        Returns:
         int: the next action that should be taken by
         """
         # Get a list of the ride requests driver got.
@@ -108,13 +143,14 @@ Returns:
         Convert the input state to a vector representation.
 
         Fixes Made:
-                                                                        1.conversion of state[1] and state[2] variables to int before adding it to the index to avoid unnecessary type casting errors.
-                                                                        2.more clear and readable comments added
+        1.conversion of state[1] and state[2] variables to int before adding it to the index to avoid unnecessary type casting errors.
+        2.more clear and readable comments added
+        3.changed numpy to jax.numpy
 
-Parameters:
+        Parameters:
         state (array-like): The current state of the agent.
 
-Returns:
+        Returns:
         list of float : the vector representation of the input state
         """
         # create a zero vector of size m + t + d
@@ -142,11 +178,14 @@ Returns:
             # Sample batch from the memory
             mini_batch = random.sample(self.memory, self.batch_size)
             # Use list comprehension to extract states, actions, rewards, next_states, and done_boolean from mini_batch
-            states, actions, rewards, next_states, dones = zip(*mini_batch)
+            states, actions, rewards, next_states, dones = zip(
+                *mini_batch)
 
             # Use numpy operations to convert states and next_states to vectors
-            update_input = np.array([self.convert_state_to_vector(state) for state in states])
-            update_output = np.array([self.convert_state_to_vector(next_state) for next_state in next_states])
+            update_input = np.array(
+                [self.convert_state_to_vector(state) for state in states])
+            update_output = np.array([self.convert_state_to_vector(
+                next_state) for next_state in next_states])
 
             # predict the target q-values from states s
             target = self.model.predict(update_input, verbose=0)
@@ -170,20 +209,20 @@ Returns:
 
     def load(self, name):
         """
-Load the model's weights from a file.
+        Load the model's weights from a file.
 
-Parameters:
-        name (str): The name of the file to load the weights from.
-"""
+        Parameters:
+        name (str): The name of the file to load the weights from. 
+        """
         self.model.load_weights(name)
 
     def save(self, name):
         """
-Save the model's weights to a file.
+        Save the model's weights to a file.
 
-Parameters:
+        Parameters:
         name (str): The name of the file to save the weights to.
-"""
+        """
         self.model.save_weights(name)
 
 # These functions were added by Jokke Ruokolainen for solution comparison and convenience
@@ -201,23 +240,24 @@ Parameters:
 
     def create_track_state(self, state_values, action_index):
         """
-Create a tuple of the state and its corresponding action index to track.
+        Create a tuple of the state and its corresponding action index to track.
 
-Parameters:
+        Parameters:
         state_values (tuple of int): The values of the state to track.
         action_index (int): The index of the action corresponding to the state. 
-Returns:
+
+        Returns:
         tuple : A tuple containing the state and its corresponding action index.
-"""
+        """
         state = np.array(self.convert_state_to_vector(
             state_values)).reshape(1, self.state_size)
         return state, action_index
 
     def track_sample_state(self, states_tracked, track_state, action_index):
         """
-Add the state and its corresponding action index to the list of states to be tracked.
+        Add the state and its corresponding action index to the list of states to be tracked.
 
-Parameters:
+        Parameters:
         states_tracked (list): A list of states and their corresponding action indices to track.
         track_state (tuple): The state and its corresponding action index to be added to the list.
         action_index (int): The index of the action corresponding to the state.
@@ -226,8 +266,8 @@ Parameters:
 
     def save_tracking_states(self):
         """
-Save the q-values of the tracked states using the model's predictions.
-"""
+        Save the q-values of the tracked states using the model's predictions.
+        """
         q_values = self.model.predict(np.concatenate(
             [self.track_state_1, self.track_state_2]), verbose=0)
         # action (2,3) at index 11 in the action space
@@ -237,11 +277,11 @@ Save the q-values of the tracked states using the model's predictions.
 
     def save_weights_numpy(self, name):
         """
-Save the model's weights to a numpy file.
+        Save the model's weights to a numpy file.
 
-Parameters:
+        Parameters:
         name (str): The name of the file to save the weights to.
-"""
+        """
         weights = self.model.get_weights()
         try:
             with open(name, "wb") as fpkl:
