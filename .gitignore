@@ -160,4 +160,4 @@ cython_debug/
 #.idea/
 
 # ignore all files in output folder
-/Data/Outputs/chatGPT_dev/*
+/Data/Outputs/*
