@@ -9,15 +9,20 @@ t = 24  # number of hours
 d = 7  # number of days
 C = 5  # Per hour battery consumption
 R = 9  # Per hour revenue from a passenger
-max_time = 24 * 30
 
 
 class CabDriver:
     def __init__(self):
         """ Iitializes your state and defines your action space and state space
+
         Fixes made:
                 1.imports not needed math library removed.
                 2.Instead of using np.random.choice(len(self.state_space)) to select a random state, we can use np.random.choice(self.state_space) this is faster and more readable.
+
+        Parameters:
+
+        state_size (int): The size of the state space.
+        action_size (int): The size of the action space.
         """
         # create a list of all possible actions, excluding riding from a city to itself
         self.action_space = [[p, q] for p in range(
@@ -33,30 +38,11 @@ class CabDriver:
         self.state_init = self.state_space[np.random.choice(
             len(self.state_space))]
 
-        # set terminal state to false
-        self.terminal_state = False
-
         # set total drive time to zero
         self.total_time = 0
 
         # start the first round
         self.reset()
-
-    def convert_state_to_vector(self, state):
-        """Convert the state into a vector so that it can be fed to the NN.
-        This method converts a given state into a vector format of size m + t + d.
-        """
-        # create a zero vector of size m + t + d
-        state_encod = jnp.zeros(m + t + d)
-        # set the value at the index corresponding to the location to 1
-        state_encod = state_encod.at[state[0]].set(1)
-        # set the value at the index corresponding to the time to 1
-        state_encod = state_encod.at[m + int(state[1])].set(1)
-        # set the value at the index corresponding to the day to 1
-        state_encod = state_encod.at[m + t + int(state[2])].set(1)
-
-        return state_encod
-
 
     def requests(self, state):
         """Determining the number of requests based on the location
@@ -112,35 +98,15 @@ class CabDriver:
             state[1], state[2], self.total_time)
         next_loc = action[1]
 
-        # check whether it is a terminal state
-        if self.total_time >= max_time:
-            self.terminal_state = 1
-            self.total_time = 0
-        else:
-            self.terminal_state = 0
-
-        terminal_state = bool(self.terminal_state)
-
         # Finding next_state using the next_loc and the next time states.
         next_state = [next_loc, next_time, next_day]
 
-        return next_state, wait_time, transit_time, ride_time, terminal_state
-
-    def next_state_func(self, state, action, Time_matrix):
-        """Takes state, action and Time_matrix as input and returns next state
-        Fixes Made:
-                1.next_state_func is a wrapper function for the get_next_state_and_time_func, so it is better to just return the first element of the output directly.
-                Fixes Made:
-                        1.Instead of calculating idle time separately, we can directly add wait_time and transit_time from get_next_state_and_time_func() output.
-                        2.Instead of using if-else to check if customer_ride_time is 0, we can use ternary operator.
-                        3.use the pythonic variable naming convention where the variable name should be meaningful and concise, i.e. wait_time, transit_time, ride_time, idle_time and customer_ride_time.
-        """
-        return self.get_next_state_and_time_func(state, action, Time_matrix)[0]
+        return next_state, wait_time, transit_time, ride_time
 
     def reward_func(self, state, action, Time_matrix):
         """Takes in state, action and Time_matrix and returns the reward
         """
-        _, wait_time, transit_time, ride_time, terminal_state = self.get_next_state_and_time_func(
+        _, wait_time, transit_time, ride_time = self.get_next_state_and_time_func(
             state, action, Time_matrix)
         idle_time = wait_time + transit_time
         customer_ride_time = ride_time
@@ -153,14 +119,14 @@ class CabDriver:
                 2.the output of the function get_next_state_and_time_func can be unpack directly to multiple variable
         """
         # Get the next state and the various time durations
-        next_state, wait_time, transit_time, ride_time, terminal_state = self.get_next_state_and_time_func(
+        next_state, wait_time, transit_time, ride_time = self.get_next_state_and_time_func(
             state, action, Time_matrix)
 
         # Calculate the reward and total_time of the step
         reward = self.reward_func(state, action, Time_matrix)
         total_time = wait_time + transit_time + ride_time
 
-        return next_state, reward, total_time, terminal_state
+        return next_state, reward, total_time
 
     def reset(self):
         return self.action_space, self.state_space, self.state_init

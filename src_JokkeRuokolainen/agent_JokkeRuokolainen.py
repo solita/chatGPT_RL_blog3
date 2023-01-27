@@ -8,7 +8,7 @@ from keras import Model
 from keras import backend as K
 from keras.layers import Dense, Input, Lambda
 from keras.losses import huber
-from keras.optimizers import Nadam
+from keras.optimizers import Adam
 
 # from .prb import PrioritizedReplayBuffer
 # Defining hyperparameters
@@ -51,14 +51,14 @@ class DuelingQAgent:
         Build the Dueling Q-Network model for the agent.
         """
         input_state = Input(shape=(self.state_size,))
-        x = Dense(24, activation='relu')(input_state)
-        x = Dense(24, activation='relu')(x)
+        x = Dense(64, activation='swish')(input_state)
+        x = Dense(64, activation='swish')(x)
         value = Dense(1, activation='linear')(x)
         advantage = Dense(self.action_size, activation='linear')(x)
         output = Lambda(
             lambda x: x[0] + (x[1]-K.mean(x[1], axis=1, keepdims=True)))([value, advantage])
         model = Model(inputs=input_state, outputs=output)
-        model.compile(loss=huber, optimizer=Nadam(
+        model.compile(loss=huber(), optimizer=Adam(
             learning_rate=self.learning_rate))
         return model
 
@@ -142,11 +142,6 @@ class DuelingQAgent:
         """
         Convert the input state to a vector representation.
 
-        Fixes Made:
-        1.conversion of state[1] and state[2] variables to int before adding it to the index to avoid unnecessary type casting errors.
-        2.more clear and readable comments added
-        3.changed numpy to jax.numpy
-
         Parameters:
         state (array-like): The current state of the agent.
 
@@ -169,11 +164,6 @@ class DuelingQAgent:
         """
         Train the model by picking random memories from the memory buffer and running them through the network.
         """
-        # Write your code from here
-        # 1. Update your 'update_output' and 'update_input' batch
-        # 2. Predict the target from earlier model
-        # 3. Get the target for the Q-network
-
         if len(self.memory) > self.batch_size:
             # Sample batch from the memory
             mini_batch = random.sample(self.memory, self.batch_size)

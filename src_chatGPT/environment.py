@@ -89,7 +89,7 @@ class CabDriver():
 		current_state, current_h, current_d = state
 		offline = True if action == [0, 0] else False
 		total_ride_time = self.calculate_time(offline, current_state, pickup, dropoff, current_h, current_d, Time_matrix)
-		reward = (total_ride_time * R) - (total_ride_time * C)
+		reward = (total_ride_time * R) - (total_ride_time * C) if total_ride_time != 0 else -C
 		return reward
 
 	def next_state_func(self, state, action, Time_matrix):
