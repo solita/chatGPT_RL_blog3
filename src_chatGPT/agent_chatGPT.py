@@ -3,6 +3,7 @@ import random
 from collections import deque
 
 import numpy as np
+import tensorflow as tf
 from keras.layers import Conv1D, Dense, Flatten, MaxPooling1D
 from keras.models import Sequential
 from keras.optimizers import Adam
@@ -11,7 +12,7 @@ from keras.optimizers import Adam
 m = 5  # number of cities, ranges from 1 ..... m
 t = 24  # number of hours, ranges from 0 .... t-1
 d = 7  # number of days, ranges from 0 ... d-1
-
+num_devices = len(tf.config.list_physical_devices())
 
 class DQNAgent:
 	def __init__(self, state_size, action_size):
@@ -25,13 +26,13 @@ class DQNAgent:
 		self.state_size = state_size
 		self.action_size = action_size
 		self.discount_factor = 0.95
-		self.learning_rate = 0.01
+		self.learning_rate = 0.001
 		self.epsilon = 1.0
 		self.epsilon_max = 1.0
-		self.epsilon_decay = 0.001
-		self.epsilon_min = 0.01
+		self.epsilon_decay = -0.00045
+		self.epsilon_min = 0.0000001
 
-		self.batch_size = 64
+		self.batch_size = 4096
 		self.memory = deque(maxlen=2000)
 
 		self.model = self.build_model()
@@ -40,15 +41,28 @@ class DQNAgent:
 	
 	def build_model(self):
 		"""Build the neural network model for the DQN"""
-		model = Sequential()
-		model.add(Conv1D(32, kernel_size=3, activation='relu', input_shape=(self.state_size, 1)))
-		model.add(MaxPooling1D(pool_size=2))
-		model.add(Conv1D(64, kernel_size=3, activation='relu'))
-		model.add(MaxPooling1D(pool_size=2))
-		model.add(Flatten())
-		model.add(Dense(64, activation='relu'))
-		model.add(Dense(self.action_size, activation='linear'))
-		model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
+		if num_devices>2:
+			strategy = tf.distribute.MirroredStrategy()
+			with strategy.scope():
+				model = Sequential()
+				model.add(Conv1D(32, kernel_size=3, activation='relu', input_shape=(self.state_size, 1)))
+				model.add(MaxPooling1D(pool_size=2))
+				model.add(Conv1D(64, kernel_size=3, activation='relu'))
+				model.add(MaxPooling1D(pool_size=2))
+				model.add(Flatten())
+				model.add(Dense(64, activation='relu'))
+				model.add(Dense(self.action_size, activation='linear'))
+				model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
+		else:
+			model = Sequential()
+			model.add(Conv1D(32, kernel_size=3, activation='relu', input_shape=(self.state_size, 1)))
+			model.add(MaxPooling1D(pool_size=2))
+			model.add(Conv1D(64, kernel_size=3, activation='relu'))
+			model.add(MaxPooling1D(pool_size=2))
+			model.add(Flatten())
+			model.add(Dense(64, activation='relu'))
+			model.add(Dense(self.action_size, activation='linear'))
+			model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
 		return model
 
 
@@ -67,6 +81,16 @@ class DQNAgent:
 		float: The epsilon value for the given step.
 		"""
 		return initial_epsilon / (1 + decay_rate * step)
+	
+	def exponential_decay(self, step: int) -> float:
+		"""
+		This function returns the epsilon value for the given step using exponential decay.
+		The epsilon value starts at the initial_epsilon and decays exponentially with decay_rate.
+		It is used as a part of exploration-exploitation trade-off of reinforcement learning.
+		"""
+		return self.epsilon_min + (
+			self.epsilon_max - self.epsilon_min
+		) * np.exp(self.epsilon_decay * step)
 
 	def get_action(self, state, possible_actions_index):
 		"""
@@ -174,34 +198,34 @@ class DQNAgent:
 
 	def create_track_state(self, state_values, action_index):
 		"""
-        Create a tuple of the state and its corresponding action index to track.
+		Create a tuple of the state and its corresponding action index to track.
 
-        Parameters:
-        state_values (tuple of int): The values of the state to track.
-        action_index (int): The index of the action corresponding to the state. 
+		Parameters:
+		state_values (tuple of int): The values of the state to track.
+		action_index (int): The index of the action corresponding to the state. 
 
-        Returns:
-        tuple : A tuple containing the state and its corresponding action index.
-        """
+		Returns:
+		tuple : A tuple containing the state and its corresponding action index.
+		"""
 		state = np.array(self.convert_state_to_vector(
 			state_values)).reshape(1, self.state_size)
 		return state, action_index
 
 	def track_sample_state(self, states_tracked, track_state, action_index):
 		"""
-        Add the state and its corresponding action index to the list of states to be tracked.
+		Add the state and its corresponding action index to the list of states to be tracked.
 
-        Parameters:
-        states_tracked (list): A list of states and their corresponding action indices to track.
-        track_state (tuple): The state and its corresponding action index to be added to the list.
-        action_index (int): The index of the action corresponding to the state.
-        """
+		Parameters:
+		states_tracked (list): A list of states and their corresponding action indices to track.
+		track_state (tuple): The state and its corresponding action index to be added to the list.
+		action_index (int): The index of the action corresponding to the state.
+		"""
 		states_tracked.append((track_state, action_index))
 
 	def save_tracking_states(self):
 		"""
-        Save the q-values of the tracked states using the model's predictions.
-        """
+		Save the q-values of the tracked states using the model's predictions.
+		"""
 		# Use the model to predict the q_value of the state we are tracking.
 		q_values = self.model.predict(np.concatenate(
 			[self.track_state_1, self.track_state_2]), verbose=0)
