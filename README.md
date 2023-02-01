@@ -15,16 +15,12 @@ All resources from the first part of the blog post.
 
 ```
 tree -a  -I '__pycache__|.git|.gitignore|.DS_*' .
+
 .
 ├── Data
 │   ├── Inputs
 │   │   └── TM.npy
 │   └── Outputs
-│       ├── DuelingDQN
-│       │   ├── cab_driver.h5
-│       │   ├── model.h5
-│       │   └── model_weights.pkl
-│       └── chatGPT_DQN
 ├── LICENSE
 ├── README.md
 ├── notebooks
@@ -41,5 +37,5 @@ tree -a  -I '__pycache__|.git|.gitignore|.DS_*' .
     ├── test_agent.py
     └── test_env.py
 
-9 directories, 16 files
+7 directories, 13 files
 ```
